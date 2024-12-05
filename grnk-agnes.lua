@@ -40,7 +40,7 @@ function init()
     table.insert(scale_names, MusicUtil.SCALES[i].name)
   end
 
-  params:add_separator("GRNK KEYS")
+  params:add_separator("AGNES")
   
   -- setting root notes using params
   params:add{type = "number", id = "root_note", name = "root note",
@@ -202,7 +202,7 @@ function redraw()
   screen.clear() -- clear screen
   screen.level(15)
   screen.move(0,10)
-  screen.text('GRNK KEYS')
+  screen.text('AGNES')
   screen.move(0,50)
   screen.text(scale_names[params:get("scale")])
   screen.move(0,60)
