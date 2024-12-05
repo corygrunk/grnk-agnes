@@ -43,6 +43,7 @@ function init()
   pat = pattern_time.new() -- establish a pattern recorder
   pat.process = play_pattern -- assign the function to be executed when the pattern plays back
   key_value = 0
+  key_state = 0
 
   crow.output[2].action = "ar(dyn{ attack = 0.001 }, dyn{ decay = 0.1 }, 10, 'logarithmic')" -- linear sine logarithmic exponential
   crow.output[4].action = "ar(dyn{ attack = 0.001 }, dyn{ decay = 0.1 }, 10, 'logarithmic')" -- linear sine logarithmic exponential
@@ -89,15 +90,16 @@ end
 function record_pat_value()
   pat:watch(
     {
-      ["value"] = key_value
+      ["value"] = key_value,
+      ["state"] = key_state
     }
   )
 end
 
 function play_pattern(data)
-  key_value = data.value
-  live_pad(data.value,1)
+  live_pad(data.value,data.state)
   screen_dirty = true
+  grid_dirty = true
 end
 
 
@@ -119,15 +121,21 @@ end
 
 function live_pad(note,z_state)
   if z_state == 1 then -- note pressed
-    if armed and pat.rec == 0 then -- NOT SURE I NEED PAT.REC == 0
+    if armed and pat.rec == 0 then
       pat:rec_start() -- start recording
       armed = false
     end
+    print(note .. '   ' .. z_state)
     key_value = note
+    key_state = z_state
     record_pat_value()
     play_note(engines[1],note,note_attack,note_decay) -- play the note
     jitter_amt = math.random(8,10)
   elseif z_state == 0 then -- note released
+    print(note .. '   ' .. z_state)
+    key_value = note
+    key_state = z_state
+    record_pat_value()
     stop_note(engines[1],note) -- stop the note
     jitter_amt = 1
   end
