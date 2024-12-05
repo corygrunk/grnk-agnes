@@ -1,15 +1,24 @@
 -- GRNK Agnes
 -- Play notes on a the grid
 
+-- TODO: Grid buttons to arm recording etc.
+-- TODO: Note off to support MIDI
+-- TODO: TEST CROW/JF
+-- TODO: Light up grid when note is played and on playback
+-- TODO: Allow different MXSamples sounds
+
 g = grid.connect() -- if no argument is provided, defaults to port 1
 
 mxsamples=include("mx.samples/lib/mx.samples")
 engine.name = 'MxSamples'
 skeys=mxsamples:new()
-mxsamples_soundsrc = 'music box' -- IT WOULD BE NICE TO NOT HARD CODE THIS
+mxsamples_soundsrc = 'ghost piano' -- IT WOULD BE NICE TO NOT HARD CODE THIS
 
 MusicUtil = require('musicutil')
 TAB = require('tabutil')
+
+pattern_time = require 'pattern_time'
+armed = false
 
 scale_names = {}
 
@@ -32,6 +41,9 @@ note_attack = 0.01
 note_decay = 1
 
 function init()
+  pat = pattern_time.new() -- establish a pattern recorder
+  pat.process = play_pattern -- assign the function to be executed when the pattern plays back
+  key_value = 0
 
   crow.output[2].action = "ar(dyn{ attack = 0.001 }, dyn{ decay = 0.1 }, 10, 'logarithmic')" -- linear sine logarithmic exponential
   crow.output[4].action = "ar(dyn{ attack = 0.001 }, dyn{ decay = 0.1 }, 10, 'logarithmic')" -- linear sine logarithmic exponential
@@ -61,8 +73,9 @@ function init()
 
   redraw_clock_id = clock.run(redraw_clock)
 
-  grid_dirty = true -- use flags to keep track of whether hardware needs to be redrawn
-  
+  play_note(engines[1],60,0.01,0.01) -- playing a note to activate the MXSamples engine
+
+  grid_dirty = true
   screen_dirty = true
 end
 
@@ -72,6 +85,24 @@ function build_scale()
     table.insert(notes, notes[i])
   end
 end
+
+
+function record_pat_value()
+  pat:watch(
+    {
+      ["value"] = key_value
+    }
+  )
+end
+
+function play_pattern(data)
+  key_value = data.value
+  live_pad(data.value,1)
+  screen_dirty = true
+end
+
+
+
 
 function redraw_clock()
   while true do
@@ -86,8 +117,15 @@ function redraw_clock()
   end
 end
 
+
 function live_pad(note,z_state)
   if z_state == 1 then -- note pressed
+    if armed then
+      pat:rec_start() -- start recording
+      armed = false
+    end
+    key_value = note
+    record_pat_value()
     play_note(engines[1],note,note_attack,note_decay) -- play the note
     jitter_amt = math.random(8,10)
   elseif z_state == 0 then -- note released
@@ -203,11 +241,39 @@ function redraw()
   screen.level(15)
   screen.move(0,10)
   screen.text('AGNES')
+  screen.move(127,10)
+  if armed and pat.rec == 0 then
+    screen.text_right('ready to rec')
+  elseif armed == false and pat.count == 0 and pat.rec == 0 then
+    screen.text_right('k3 to arm')
+  elseif armed == false and pat.count ~= 0 and pat.rec == 0 then
+    screen.text_right('k2 to pause')
+  else
+    screen.text_right('k3 to loop')
+  end
   screen.move(0,50)
   screen.text(scale_names[params:get("scale")])
   screen.move(0,60)
   screen.text('note: ' .. MusicUtil.note_num_to_name(note_name) .. ' (' .. note_name .. ')')
   
+  screen.move(127,60)
+  if pat.count == 0 then
+    screen.level(6)
+    screen.text_right('no pattern')
+  elseif pat.count ~= 0 and pat.play == 1 and pat.overdub == 0 then
+    screen.level(15)
+    screen.text_right('playing')
+  elseif pat.count ~= 0 and pat.play == 0 and pat.rec == 0 then
+    screen.level(6)
+    screen.text_right('paused')
+  elseif pat.count ~= 1 and pat.play == 1 and pat.overdub == 1 then
+    screen.level(15)
+    screen.text_right('overdub')
+  else
+    screen.level(15)
+    screen.text_right('recording')
+  end
+
   screen.level(jitter_amt)
   screen.fill('#f0f0f005')
   screen.circle(math.random(60,60+jitter_amt), math.random(30,30+jitter_amt), 2+jitter_amt)
@@ -218,33 +284,34 @@ end
 alt_func = false
 
 function key(n,z)
-  if z == 1 and n == 1 then
-    alt_func = true
-    print('key1')
-  else 
-    alt_func = false
+  if n == 3 and z == 1 then
+    if pat.rec == 1 then -- if we're recording...
+      pat:rec_stop() -- stop recording
+      pat:start() -- start playing
+    elseif pat.count == 0 and armed == false then -- otherwise, if there are no events recorded..
+      armed = true
+    elseif pat.count == 0 and armed == true then -- if there are no events recorded and we're armed...
+      armed = false
+    elseif pat.play == 1 then -- if we're playing...
+      pat:stop() -- stop playing
+    else -- if by this point, we're not playing...
+      pat:start() -- start playing
+    end
+  elseif n == 2 and z == 1 then
+    pat:rec_stop() -- stops recording
+    pat:stop() -- stops playback
+    pat:clear() -- clears the pattern
+    key_value = 0
+  elseif n == 1 then
+    pat:set_overdub(z) -- toggles overdub
   end
-  if z == 1 and n == 2 then
-    print('key2')
-    redraw()
-  end
-  if z == 1 and n == 3 then
-    print('key3')
-    redraw()
-  end
+  screen_dirty = true
 end
 
 function enc(n,d)
-  if n == 1 then
-    print('enc1')
-    redraw()
-  end
-  if n == 2 then
-    print('enc2')
-    redraw()    
-  elseif n == 3 then
-    print('enc3')
-    redraw()      
+  if n == 3 then
+    print("enc3 " .. d)
+    screen_dirty = true
   end
 end
 
