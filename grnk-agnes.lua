@@ -1,8 +1,7 @@
 -- GRNK Agnes
 -- Play notes on a the grid
 
--- TODO: Grid buttons to arm recording etc.
--- TODO: Note off to support MIDI
+-- TODO: Note off to support MIDI and not go crazy!
 -- TODO: TEST CROW/JF
 -- TODO: Light up grid when note is played and on playback
 -- TODO: Allow different MXSamples sounds
@@ -120,7 +119,7 @@ end
 
 function live_pad(note,z_state)
   if z_state == 1 then -- note pressed
-    if armed then
+    if armed and pat.rec == 0 then -- NOT SURE I NEED PAT.REC == 0
       pat:rec_start() -- start recording
       armed = false
     end
@@ -204,6 +203,28 @@ function grid_redraw()
       end
     end
 
+    if armed then
+      g:led(1,1,15)
+    elseif armed == false and pat.count ~= 0 then
+      g:led(1,1,8)
+    else
+      g:led(1,1,3)
+    end
+
+    if pat.play == 1 then
+      g:led(1,2,8)
+    elseif pat.play == 0 and pat.count ~= 0 then
+      g:led(1,2,6)
+    else
+      g:led(1,2,3)
+    end
+
+    if pat.overdub == 1 and pat.count ~= 0 then
+      g:led(1,7,8)
+    elseif pat.overdub == 0 and pat.count ~= 0 then
+      g:led(1,7,3)
+    end
+
     g:intensity(led_intensity) -- change intensity
     g:refresh() -- refresh the LEDs
   end
@@ -233,6 +254,33 @@ function g.key(x,y,z)
       if y == 1 then if x == i + 8 then live_pad(notes[i + 28], z) end end
     end
   end
+
+  if x == 1 and y == 1 and z == 1 then
+    if pat.rec == 1 then -- if we're recording...
+      pat:rec_stop()
+      pat:start()
+    elseif pat.rec == 0 and armed == false then -- otherwise, if there are no events recorded..
+      if pat.play == 1 then pat:stop() end
+      if pat.count ~= 0 then pat:clear() end
+      armed = true
+    elseif pat.rec == 0 and armed == true then
+      armed = false
+    end
+  end
+
+  if x == 1 and y == 2 and z == 1 then
+    if pat.rec == 0 and pat.play == 1 then
+      pat:stop()
+    elseif pat.rec == 0 and pat.play == 0 then
+      pat:start()
+    end
+  end
+
+  if x == 1 and y == 7 then
+    pat:set_overdub(z) -- toggles overdub
+  end
+
+  grid_dirty = true
 end
 
 
@@ -243,13 +291,11 @@ function redraw()
   screen.text('AGNES')
   screen.move(127,10)
   if armed and pat.rec == 0 then
-    screen.text_right('ready to rec')
-  elseif armed == false and pat.count == 0 and pat.rec == 0 then
-    screen.text_right('k3 to arm')
-  elseif armed == false and pat.count ~= 0 and pat.rec == 0 then
-    screen.text_right('k2 to pause')
-  else
+    screen.text_right('armed')
+  elseif pat.rec == 1 then
     screen.text_right('k3 to loop')
+  elseif armed == false and pat.rec == 0 then
+    screen.text_right('k3 to arm')
   end
   screen.move(0,50)
   screen.text(scale_names[params:get("scale")])
@@ -265,7 +311,7 @@ function redraw()
     screen.text_right('playing')
   elseif pat.count ~= 0 and pat.play == 0 and pat.rec == 0 then
     screen.level(6)
-    screen.text_right('paused')
+    screen.text_right('stopped')
   elseif pat.count ~= 1 and pat.play == 1 and pat.overdub == 1 then
     screen.level(15)
     screen.text_right('overdub')
@@ -275,7 +321,7 @@ function redraw()
   end
 
   screen.level(jitter_amt)
-  screen.fill('#f0f0f005')
+  screen.fill()
   screen.circle(math.random(60,60+jitter_amt), math.random(30,30+jitter_amt), 2+jitter_amt)
   screen.update()
   screen_dirty = false
@@ -286,26 +332,26 @@ alt_func = false
 function key(n,z)
   if n == 3 and z == 1 then
     if pat.rec == 1 then -- if we're recording...
-      pat:rec_stop() -- stop recording
-      pat:start() -- start playing
-    elseif pat.count == 0 and armed == false then -- otherwise, if there are no events recorded..
+      pat:rec_stop()
+      pat:start()
+    elseif pat.rec == 0 and armed == false then -- otherwise, if there are no events recorded..
+      if pat.play == 1 then pat:stop() end
+      if pat.count ~= 0 then pat:clear() end
       armed = true
-    elseif pat.count == 0 and armed == true then -- if there are no events recorded and we're armed...
+    elseif pat.rec == 0 and armed == true then
       armed = false
-    elseif pat.play == 1 then -- if we're playing...
-      pat:stop() -- stop playing
-    else -- if by this point, we're not playing...
-      pat:start() -- start playing
     end
   elseif n == 2 and z == 1 then
-    pat:rec_stop() -- stops recording
-    pat:stop() -- stops playback
-    pat:clear() -- clears the pattern
-    key_value = 0
+    if pat.rec == 0 and pat.play == 1 then
+      pat:stop()
+    elseif pat.rec == 0 and pat.play == 0 then
+      pat:start()
+    end
   elseif n == 1 then
     pat:set_overdub(z) -- toggles overdub
   end
   screen_dirty = true
+  grid_dirty = true
 end
 
 function enc(n,d)
