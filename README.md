@@ -1,2 +1,2 @@
-# grnk-mannequins
-norns script for controlling manniquins skiff
+# grnk-agnes
+norns script for something
