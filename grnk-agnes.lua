@@ -1,7 +1,6 @@
 -- GRNK Agnes
 -- Play notes on a the grid
 
--- TODO: Note off to support MIDI and not go crazy!
 -- TODO: TEST CROW/JF
 -- TODO: Light up grid when note is played and on playback
 -- TODO: Allow different MXSamples sounds
